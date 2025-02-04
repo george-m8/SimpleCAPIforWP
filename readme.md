@@ -1,6 +1,100 @@
-## To Do:
-- Properly sort lead events
-    - Appears to be working
-    - is loading js in head an issue? GPT wanted in footer, why?
-    - Is payload correct, need to work out how to view
-    - if so, just need to add callback from hubspot forms afterwards.
+# Simple FB Pixel and CAPI
+
+A lightweight plugin that injects Facebook Pixel on the frontend and sends server-side events to Meta’s Conversions API (CAPI). Currently supports PageView and Lead events.
+
+## Description
+
+Simple FB Pixel and CAPI automatically places the Facebook Pixel code in the header of your WordPress site. It also sends server-side page_view events to Meta’s Conversions API on each page load and includes a simple mechanism to send Lead events (both on the client side through the pixel and server side through CAPI).
+
+### With this plugin, you can:
+	•	Track PageViews in both the Pixel and CAPI.
+	•	Trigger Lead events in Pixel and CAPI (e.g., when a user completes a form).
+
+## Features
+	•	Quick Setup: Just drop in your Meta Pixel ID and Access Token in the config.json file.
+	•	Modular Code: Clear separation between building the payload, sending it to CAPI, and hooking into WordPress events.
+	•	Easy Debugging: Turn on/off debug logs via a single constant.
+	•	Ajax Endpoint for Lead Events: Fire a Lead event from any JavaScript code (e.g., after a successful form submission).
+
+## Installation & Setup
+	1.	Upload & Activate
+	•	Place the entire plugin folder (e.g., simple-fb-pixel-capi) in your WordPress wp-content/plugins directory.
+	•	Activate it from Plugins in the WordPress Admin.
+	2.	Add Your Config
+	•	In the plugin directory, open config.json (or create it if it doesn’t exist).
+	•	Provide your Pixel ID and Access Token:
+
+```json
+{
+  "pixel_id": "YOUR_PIXEL_ID",
+  "access_token": "YOUR_ACCESS_TOKEN"
+}
+```
+
+	3.	Set Debug Mode (Optional)
+	•	Open the main plugin file (e.g., simple-fb-pixel-capi.php) and look for:
+
+```php
+define('SIMPLE_PIXEL_DEBUG', true);
+```
+
+	•	Switch it to false if you don’t want verbose logging.
+
+## Usage
+
+### PageView Events
+	1.	Automatic on Page Load
+	•	Once the plugin is active, every time a user visits a page, the Pixel code will fire a standard PageView event client-side.
+	•	Simultaneously, your server will send a page_view event to Meta’s CAPI in the background.
+	2.	No Extra Setup
+	•	There is nothing else you need to do for the PageView event to work.
+
+### Lead Events
+	1.	Client-Side Trigger
+	•	The plugin provides a JavaScript function called sendHubspotLeadEvent(). If a page has your plugin’s JS enqueued, you can trigger a lead event simply by calling:
+
+```js
+sendHubspotLeadEvent();
+```
+
+	•	This will do two things:
+	1.	Fire a Lead event on the Pixel client side: fbq('track', 'Lead');
+	2.	Make an AJAX call to admin-ajax.php?action=send_lead_capi_event to send a server-side Lead event.
+
+	2.	Example Usage in a Form
+	•	If you’re using a form (e.g., HubSpot), you can call sendHubspotLeadEvent() inside the form’s on-submit success callback, so that your Lead event fires right after the user submits.
+	3.	Result
+	•	If everything is set up correctly, your plugin will send the Lead event to Facebook from both the client and the server.
+
+## Debugging
+	1.	Check Dev Tools
+	•	In your browser’s Dev Tools → Network tab, look for:
+	•	The Pixel request (https://www.facebook.com/tr?...) for the client-side.
+	•	An AJAX request to admin-ajax.php?action=send_lead_capi_event when firing the Lead event.
+	2.	Enable WordPress Debug Logs
+	•	In your wp-config.php, enable:
+
+```php
+define('WP_DEBUG', true);
+define('WP_DEBUG_LOG', true);
+define('WP_DEBUG_DISPLAY', false);
+```
+
+	•	Look in wp-content/debug.log for plugin debug messages. If SIMPLE_PIXEL_DEBUG is true, you should see logs about payload building and sending.
+
+	3.	Check the Response
+	•	If SIMPLE_PIXEL_DEBUG is true, the plugin will log both the payload sent to Meta and the response.
+	•	If the response from Meta indicates “Success”, you’re good to go. If there’s an error, you’ll see it in the logs (e.g. invalid access token).
+
+## Technical Details
+	•	Plugin Files:
+	•	simple-fb-pixel-capi.php (Main plugin file with hooks & actions)
+	•	includes/capi-functions.php (Helper functions for building payloads and sending to CAPI)
+	•	js/hubspotTracking.js (JavaScript for triggering the lead event)
+	•	config.json (Holds your Pixel ID and Access Token)
+	•	Server-Side:
+	•	Uses wp_remote_post() to send the JSON payload to https://graph.facebook.com/v12.0/{pixel_id}/events?access_token={access_token}.
+	•	Client-Side:
+	•	Injects the Facebook Pixel script via wp_head.
+	•	Fires PageView automatically.
+	•	Provides the sendHubspotLeadEvent function for firing the Lead event.

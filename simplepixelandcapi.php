@@ -9,7 +9,7 @@ Author: George M
 defined('ABSPATH') || exit;
 
 // Set a debug mode constant: toggle to true/false
-define('SIMPLE_PIXEL_DEBUG', true);
+define('SIMPLE_PIXEL_DEBUG', false);
 
 // Require our CAPI functions (payload building & sending)
 require_once plugin_dir_path(__FILE__) . 'includes/capi-functions.php';
