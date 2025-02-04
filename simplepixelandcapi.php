@@ -1,31 +1,30 @@
 <?php
 /*
 Plugin Name: Simple FB Pixel and CAPI
-Description: A simple plugin to add the Facebook Pixel code and Meta CAPI to your WordPress site. Currently only functioning with PageView/page_view event.
-Version: 1.1
+Description: A simple plugin to add the Facebook Pixel code and Meta CAPI to your WordPress site.
+Version: 2.0
 Author: George M
 */
 
-defined('ABSPATH') || exit; // Exit if accessed directly
+defined('ABSPATH') || exit;
 
-// Hook into wp_head to inject Pixel code
-add_action('wp_head', 'inject_facebook_pixel_code');
+// Set a debug mode constant: toggle to true/false
+define('SIMPLE_PIXEL_DEBUG', true);
 
-// Hook into template_redirect to send CAPI events
-add_action('template_redirect', 'send_capi_pageview_event');
+// Require our CAPI functions (payload building & sending)
+require_once plugin_dir_path(__FILE__) . 'includes/capi-functions.php';
 
-/**
- * Function to inject the Facebook Pixel code
- */
-function inject_facebook_pixel_code() {
-    $pixel_id = get_facebook_pixel_id();
-
-    // If no Pixel ID is set, do nothing
+// Hook to insert the pixel code in the header
+add_action('wp_head', 'simple_fb_pixel_inject_code');
+function simple_fb_pixel_inject_code() {
+    $pixel_id = simple_fb_get_config('pixel_id');
     if (!$pixel_id) {
+        if (SIMPLE_PIXEL_DEBUG) {
+            error_log('FB Pixel not injected: no pixel ID found.');
+        }
         return;
     }
-
-    echo "
+    ?>
     <!-- Facebook Meta Pixel Code -->
     <script>
       !function(f,b,e,v,n,t,s)
@@ -36,94 +35,61 @@ function inject_facebook_pixel_code() {
       t.src=v;s=b.getElementsByTagName(e)[0];
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
-      fbq('init', '{$pixel_id}'); 
+      fbq('init', '<?php echo esc_js($pixel_id); ?>'); 
       fbq('track', 'PageView');
     </script>
     <noscript>
       <img height='1' width='1' style='display:none'
-      src='https://www.facebook.com/tr?id={$pixel_id}&ev=PageView&noscript=1'/>
+      src='https://www.facebook.com/tr?id=<?php echo esc_attr($pixel_id); ?>&ev=PageView&noscript=1'/>
     </noscript>
     <!-- End Facebook Meta Pixel Code -->
-    ";
+    <?php
 }
 
-/**
- * Function to send a PageView event via Facebook CAPI
- */
-function send_capi_pageview_event() {
-    // Load the Pixel ID and Access Token
-    $pixel_id = get_facebook_pixel_id();
-    $access_token = get_facebook_access_token();
-    
-
-    // If no Pixel ID or Access Token is set, do nothing
-    if (!$pixel_id || !$access_token) {
-        error_log('Facebook CAPI: Missing Pixel ID or Access Token.');
-        return;
-    }
-
-    // Prepare the payload for the PageView event
-    $payload = [
-        'data' => [
-            [
-                'event_name' => 'page_view',
-                'event_time' => time(),
-                'action_source' => 'website',
-                'event_id' => uniqid('event_', true),
-                'event_source_url' => home_url($_SERVER['REQUEST_URI']),
-                'user_data' => [
-                    'fbp' => $_COOKIE['_fbp'] ?? '',
-                    'fbc' => $_GET['fbc'] ?? '',
-                    'client_user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? ''
-                ]
-            ]
-        ]
-    ];
-
-    // Send the payload to Facebook CAPI
-    $url = "https://graph.facebook.com/v12.0/{$pixel_id}/events?access_token={$access_token}";
-    $response = wp_remote_post($url, [
-        'body'    => json_encode($payload),
-        'headers' => ['Content-Type' => 'application/json']
+// Hook page view CAPI on template_redirect
+add_action('template_redirect', 'simple_fb_pixel_send_pageview_event');
+function simple_fb_pixel_send_pageview_event() {
+    // Build the payload
+    $payload = simple_fb_build_capi_payload('page_view', SIMPLE_PIXEL_DEBUG, [
+        'event_source_url' => home_url($_SERVER['REQUEST_URI']),
     ]);
 
-    // Debug log the payload and response
-    //error_log('Facebook CAPI Payload: ' . print_r($payload, true));
+    // Send it
+    simple_fb_send_capi_event($payload, SIMPLE_PIXEL_DEBUG);
+}
 
-    // Log errors for debugging
+// Register/Enqueue the JS
+add_action('wp_enqueue_scripts', 'simple_fb_pixel_enqueue_scripts');
+function simple_fb_pixel_enqueue_scripts() {
+    // Enqueue your JS file
+    wp_enqueue_script(
+        'simple_pixel-hubspot-tracking',
+        plugin_dir_url(__FILE__) . 'js/hubspotTracking.js',
+        [],
+        '1.0',
+        false
+    );
+
+    // Pass admin-ajax URL to JS
+    wp_localize_script(
+        'simple_pixel-hubspot-tracking',
+        'simplePixelData',
+        [
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+        ]
+    );
+}
+
+// AJAX actions for sending a Lead event
+add_action('wp_ajax_send_lead_capi_event', 'simple_fb_pixel_lead_capi_event');
+add_action('wp_ajax_nopriv_send_lead_capi_event', 'simple_fb_pixel_lead_capi_event');
+function simple_fb_pixel_lead_capi_event() {
+    $payload = simple_fb_build_capi_payload('Lead', SIMPLE_PIXEL_DEBUG);
+    $response = simple_fb_send_capi_event($payload, SIMPLE_PIXEL_DEBUG);
+
     if (is_wp_error($response)) {
-        error_log('Facebook CAPI Error: ' . $response->get_error_message());
+        wp_send_json_error($response->get_error_message());
     } else {
-        error_log('Facebook CAPI PageView Sent: ' . print_r($response, true));
+        wp_send_json_success('Lead event sent via CAPI!');
     }
-}
-
-/**
- * Function to fetch the Facebook Pixel ID
- */
-function get_facebook_pixel_id() {
-    $config_file = plugin_dir_path(__FILE__) . 'config.json';
-
-    if (!file_exists($config_file)) {
-        return false;
-    }
-
-    $config = json_decode(file_get_contents($config_file), true);
-
-    return $config['pixel_id'] ?? false;
-}
-
-/**
- * Function to fetch the Facebook Access Token
- */
-function get_facebook_access_token() {
-    $config_file = plugin_dir_path(__FILE__) . 'config.json';
-
-    if (!file_exists($config_file)) {
-        return false;
-    }
-
-    $config = json_decode(file_get_contents($config_file), true);
-
-    return $config['access_token'] ?? false;
 }
