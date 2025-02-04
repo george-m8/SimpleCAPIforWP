@@ -66,6 +66,85 @@ sendHubspotLeadEvent();
 	3.	Result
 	•	If everything is set up correctly, your plugin will send the Lead event to Facebook from both the client and the server.
 
+### `sendHubspotLeadEvent()` Usage
+
+The `sentHubspotLeadEvent()` function can be used to send a lead event after any trigger. Below are a couple of examples of its intended use:
+
+#### Hubspot Forms
+
+##### Example of standart Hubspot form embed:
+Your typical Hubspot form should be embedded as follows.
+```html
+<script charset="utf-8" type="text/javascript" src="//js.hsforms.net/forms/embed/v2.js"></script>
+<script>
+  hbspt.forms.create({
+    region: "na1",
+    portalId: "portalId",
+    formId: "formId"
+  });
+</script>
+```
+##### Example of standart Hubspot form embed with lead event sent on submission:
+Tracking can be added using the `onFormSubmit` callback, as per the example below.
+```html
+<script charset="utf-8" type="text/javascript" src="//js.hsforms.net/forms/embed/v2.js"></script>
+<script>
+  hbspt.forms.create({
+    region: "na1",
+    portalId: "portalId",
+    formId: "formId",
+    onFormSubmitted: function() {
+       sendHubspotLeadEvent();
+    }
+  });
+</script>
+```
+
+### Hubspot Meeting Booking Forms
+
+#### Example of standard Hubspot Meeting booking form:
+Typically, meeting booking form embeds will look like the example below. They do not offer a callback on submission.
+```html
+<!-- Start of Meetings Embed Script -->
+<div class="meetings-iframe-container" data-src="https://meetings.hubspot.com/form-src?embed=true"></div>
+<script type="text/javascript" src="https://static.hsappstatic.net/MeetingsEmbed/ex/MeetingsEmbedCode.js"></script>
+
+<!-- End of Meetings Embed Script -->
+```
+
+
+#### Example of Hubspot Meeting booking form with lead event sent on submission:
+As there is no callback, here we use a mutation observer to look for an element with class `'.success-header'` appearing on the page. This should cause the lead event to be sent upon the form success message. Other applications may difer. 
+```html
+<!-- Start of Meetings Embed Script -->
+<div class="meetings-iframe-container" data-src="https://meetings.hubspot.com/form-src?embed=true"></div>
+<script type="text/javascript" src="https://static.hsappstatic.net/MeetingsEmbed/ex/MeetingsEmbedCode.js"></script>
+
+<!-- End of Meetings Embed Script -->
+<!-- Observer to send lead event on submission -->
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const observer = new MutationObserver(function (mutations) {
+      mutations.forEach(function () {
+        const confirmationHeader = document.querySelector('.success-header');
+        if (confirmationHeader) {
+          sendHubspotLeadEvent();  // Trigger plugin function
+          observer.disconnect();   // Stop observing to prevent duplicate triggers
+        }
+      });
+    });
+
+    // Start observing changes in the body for form completion
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  });
+</script>
+<!-- End of observer -->
+ ```
+
+
 ## Debugging
 	1.	Check Dev Tools
 	•	In your browser’s Dev Tools → Network tab, look for:
