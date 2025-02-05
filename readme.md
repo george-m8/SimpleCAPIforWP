@@ -114,7 +114,9 @@ Typically, meeting booking form embeds will look like the example below. They do
 
 
 #### Example of Hubspot Meeting booking form with lead event sent on submission:
-As there is no callback, here we use a mutation observer to look for an element with class `'.success-header'` appearing on the page. This should cause the lead event to be sent upon the form success message. Other applications may difer. 
+As there is no callback, here we use an event listener to listen for a message from the meeting iframe. Meetings forms return a success message event with the data `meetingBookSucceeded=true`. 
+In this example we check that the origin of the event is `https://meetings.hubspot.com` and check within the data `meetingBookSucceeded` is `true`. If so, we use the javascript function to send the lead event.
+Logs can be removed or used to test/debug.
 ```html
 <!-- Start of Meetings Embed Script -->
 <div class="meetings-iframe-container" data-src="https://meetings.hubspot.com/form-src?embed=true"></div>
